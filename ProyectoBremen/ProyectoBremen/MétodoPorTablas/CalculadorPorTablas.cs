@@ -1,6 +1,6 @@
-
 using NCalc;
 using ProyectoBremen.Excepciones;
+using ProyectoBremen.MétodoPorTablas;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,16 +16,16 @@ public class CalculadorPorTablas
     /**
      * 
      */
-    public CalculadorPorTablas(PerfilViga perfilViga, Modulo modulo, List<FuerzaYDistancia> fuerzasYDistancias, string tipoDiagrama)
+    public CalculadorPorTablas(PerfilViga perfilViga, Modulo modulo, Primitivos primitivos, List<Momento> momentos, List<FuerzaYDistancia> fuerzasYDistancias, List<CargaDistribuida> cargasDistribuidas, string tipoDiagrama)
     {
         //Iniciación y declaración de variables
         this.perfilViga = perfilViga;
         this.modulo = modulo;
         this.fuerzasYDistancias = fuerzasYDistancias;
+        this.cargasDistribuidas = cargasDistribuidas;
         this.tipoDiagrama = tipoDiagrama;
-        this.deflexiones = new List<double>();
-        this.momentos = new List<double>();
-        this.reacciones = new List<double>();
+        this.momentos = momentos;
+        this.primitivos = primitivos;
 
         LlamarMetodosAsync();
 
@@ -38,6 +38,7 @@ public class CalculadorPorTablas
         this.CalcularReaccion(fuerzasYDistancias);
     }
 
+    #region ATRIBUTOS
     /**
      * 
      */
@@ -66,12 +67,22 @@ public class CalculadorPorTablas
     /**
      * 
      */
+    private List<CargaDistribuida> cargasDistribuidas;
+
+    /**
+     * 
+     */
     private List<double> deflexiones;
 
     /**
      * 
      */
-    private List<double> momentos;
+    private List<Momento> momentos;
+
+    /**
+     * 
+     */
+    private Primitivos primitivos;
 
     /**
      * 
@@ -87,9 +98,10 @@ public class CalculadorPorTablas
      * 
      */
     private string formulaAux { get; set; }
-    
 
-#region //Para la búsqueda y lectura de archivos
+#endregion
+
+    #region //Para la búsqueda y lectura de archivos
     /*
      * Este método busca el archivo en la carpeta de Assets, de no encontrarlo lanza una excepción de tipo 'FileNotFoundException'
      * @param nombreArchivoParaBuscar Es el nombre del archivo a buscar
@@ -112,7 +124,7 @@ public class CalculadorPorTablas
     }
 
     /*
-     * Este método busca lee el archivo, de existir un problema con el archivo a buscar, lanza una excepción de tipo 'FileNotFoundException'
+     * Este método lee el archivo, de existir un problema con el archivo a buscar, lanza una excepción de tipo 'FileNotFoundException'
      * Separa el archivo con el delimitador '|'
      * @param nombreArchivoParaBuscar Es el nombre del archivo a buscar
      * @return string[] Regresa un arreglo de cadenas
@@ -166,9 +178,13 @@ public class CalculadorPorTablas
     }
     #endregion
 
-#region //Para convertir el CSV en las fórmulas
+    #region //Para convertir el CSV en las fórmulas
+    /*
+     * Recibe un renglón de fórmulas tipo string y lo convierte en fórmulas operables. Guarda las fórmulas de manera interna
+     */
     private void ConvertirFormularioAFormulas(string[] contenido)
     {
+        //CONTENIDO TIENE 2 FORMULAS Y POR ESO NO ITERA SOBRE LA LETRA, SINO SOBRE LAS FÓRMULAS DISPONIBLES
         string[] cadenasDeFormulas = contenido.Skip(2).ToArray();
         formulas = new List<string>();
         for (int i = 0; i < cadenasDeFormulas.Length; i++)
@@ -192,6 +208,14 @@ public class CalculadorPorTablas
         {
             estado = ReemplazarFuerzaYDistancia();
         }
+        while (estado != 0)
+        {
+            estado = ReemplazarCargaDistribuida();
+        }
+        while (estado != 0)
+        {
+            estado = ReemplazarMomentos();
+        }
         estado = 1;
         while (estado != 0)
         {
@@ -202,9 +226,14 @@ public class CalculadorPorTablas
         {
             estado = ReemplazarPerfilViga();
         }
+        estado = 1;
+        while (estado != 0)
+        {
+            estado = ReemplazarPrimitivos();
+        }
     }
 
-#region //reemplazador de valores
+    #region //reemplazador de valores
     private int ReemplazarFuerzaYDistancia()
     {
         string subCadena;
@@ -221,9 +250,73 @@ public class CalculadorPorTablas
         {
             valor = this.fuerzasYDistancias[int.Parse(subCadena.Last().ToString())].distancia.ToString();
         }
-        else if(subCadena.ElementAt(1).ToString() == "m")
+        else if (subCadena.ElementAt(1).ToString() == "m")
         {
-            valor = this.fuerzasYDistancias[int.Parse(subCadena.Last().ToString())].Magnitud.ToString();
+            valor = this.fuerzasYDistancias[int.Parse(subCadena.Last().ToString())].magnitud.ToString();
+        }
+        else
+        {
+            throw new VarNotFoundInFormula();
+        }
+        this.formulaAux = this.formulaAux.Replace(subCadena, valor);
+        return 1;
+    }
+
+    private int ReemplazarMomentos()
+    {
+        string subCadena;
+        try
+        {
+            subCadena = this.formulaAux.Substring(this.formulaAux.IndexOf("n"), 3);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return 0;
+        }
+        string valor;
+        if (subCadena.ElementAt(1).ToString() == "y")
+        {
+            valor = this.momentos[int.Parse(subCadena.Last().ToString())].magnitud.ToString();
+        }
+        else if (subCadena.ElementAt(1).ToString() == "b")
+        {
+            valor = this.momentos[int.Parse(subCadena.Last().ToString())].distancia.ToString();
+        }
+        else
+        {
+            throw new VarNotFoundInFormula();
+        }
+        this.formulaAux = this.formulaAux.Replace(subCadena, valor);
+        return 1;
+    }
+
+    private int ReemplazarCargaDistribuida()
+    {
+        string subCadena;
+        try
+        {
+            subCadena = this.formulaAux.Substring(this.formulaAux.IndexOf("c"), 3);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return 0;
+        }
+        string valor;
+        if (subCadena.ElementAt(1).ToString() == "tq")
+        {
+            valor = this.cargasDistribuidas[int.Parse(subCadena.Last().ToString())].distanciaInicial.ToString();
+        }
+        else if (subCadena.ElementAt(1).ToString() == "pv")
+        {
+            valor = this.cargasDistribuidas[int.Parse(subCadena.Last().ToString())].distanciaFinal.ToString();
+        }
+        else if (subCadena.ElementAt(1).ToString() == "po")
+        {
+            valor = this.cargasDistribuidas[int.Parse(subCadena.Last().ToString())].magnitudInicial.ToString();
+        }
+        else if (subCadena.ElementAt(1).ToString() == "pu")
+        {
+            valor = this.cargasDistribuidas[int.Parse(subCadena.Last().ToString())].magnitudFinal.ToString();
         }
         else
         {
@@ -238,28 +331,15 @@ public class CalculadorPorTablas
         string subCadena;
         try
         {
-            subCadena = this.formulaAux.Substring(this.formulaAux.IndexOf("y"), 2);
-            if (subCadena.Contains("a"))
-                return 0;
+            subCadena = this.formulaAux.Substring(this.formulaAux.IndexOf("e"), 1);
         }
         catch (ArgumentOutOfRangeException)
         {
             return 0;
         }
-        string valor;
-        if (subCadena.ElementAt(1).ToString() == "k")
-        {
-            valor = this.modulo.codigo.ToString();
-        }
-        else if (subCadena.ElementAt(1).ToString() == "e")
-        {
-            valor = this.modulo.valor.ToString();
+        string valor = "";
+        valor = this.modulo.valor.ToString();
 
-        }
-        else
-        {
-            throw new VarNotFoundInFormula();
-        }
         this.formulaAux = this.formulaAux.Replace(subCadena, valor);
         return 1;
     }
@@ -269,27 +349,54 @@ public class CalculadorPorTablas
         string subCadena;
         try
         {
-            subCadena = this.formulaAux.Substring(this.formulaAux.IndexOf("pv"), 3);
+            subCadena = this.formulaAux.Substring(this.formulaAux.IndexOf("i"), 1);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return 0;
+        }
+        string valor = "";
+        this.perfilViga.momentoDeInercia.ToString();
+
+        this.formulaAux = this.formulaAux.Replace(subCadena, valor);
+        return 1;
+    }
+
+    private int ReemplazarPrimitivos()
+    {
+        string subCadena;
+        try
+        {
+            subCadena = this.formulaAux.Substring(this.formulaAux.IndexOf("p"), 2);
         }
         catch (ArgumentOutOfRangeException)
         {
             return 0;
         }
         string valor;
-        switch (subCadena.Last().ToString())
+        if (subCadena.ElementAt(1).ToString() == "a")
         {
-            case "i": valor = this.perfilViga.momentoDeInercia.ToString();
-                break;
-            default:
-                throw new VarNotFoundInFormula();
+            valor = this.primitivos.apoyo1.ToString();
+        }
+        else if (subCadena.ElementAt(1).ToString() == "s")
+        {
+            valor = this.primitivos.apoyo2.ToString();
+        }
+        else if (subCadena.ElementAt(1).ToString() == "l")
+        {
+            valor = this.primitivos.longitud.ToString();
+        }
+        else
+        {
+            throw new VarNotFoundInFormula();
         }
         this.formulaAux = this.formulaAux.Replace(subCadena, valor);
         return 1;
     }
 
-#endregion
+    #endregion
 
-#endregion
+    #endregion
 
     #region //Metodos principales
     /**

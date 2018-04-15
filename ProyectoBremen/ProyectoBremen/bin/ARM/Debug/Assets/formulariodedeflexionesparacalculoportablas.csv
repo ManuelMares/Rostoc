@@ -1,0 +1,2 @@
+a|Assets\DiagramasDeVigas\vigaA.png|(-fm0*Pow(fd1,3))/(48*ye*pvi)|((-fm0*fd0)/(48*ye*pvi))*(3*Pow(fd1,2)-4*Pow(fd0,2))
+b|Assets\DiagramasDeVigas\vigaA.png|(-fm0*Pow(fd1,3))/(48*ye*pvi)|((-fm0*fd0)/(48*ye*pvi))*(3*Pow(fd1,2)-4*Pow(fd0,2))

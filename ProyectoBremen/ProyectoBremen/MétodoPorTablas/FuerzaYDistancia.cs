@@ -17,7 +17,7 @@ public class FuerzaYDistancia {
     public FuerzaYDistancia(double distancia, double magnitud)
     {
         this.distancia = distancia;
-        this.Magnitud = magnitud;
+        this.magnitud = magnitud;
     }
 
     /**
@@ -28,7 +28,7 @@ public class FuerzaYDistancia {
     /**
      * 
      */
-    public double Magnitud { get; set; }
+    public double magnitud { get; set; }
 
 
 }
